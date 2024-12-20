@@ -167,6 +167,13 @@ jobs:
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
+      - name: Upload firmware directory
+        uses: actions/upload-artifact@main
+        if: steps.organize.outputs.status == 'success' && !cancelled()
+        with:
+          name: OpenWrt_firmware${{ env.TARGET }}${{ env.FILE_DATE }}
+          path: ${{ env.FIRMWARE }}
+          
       - name: Release Firmware
         uses: softprops/action-gh-release@v2
         if: steps.compile.outputs.status == 'success'  && !cancelled()
