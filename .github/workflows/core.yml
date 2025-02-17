@@ -31,15 +31,6 @@ on:
       CONFIG_FILE:
         required: true
         type: string
-      DIY_P1_SH:
-        required: true
-        type: string
-      DIY_P2_SH:
-        required: true
-        type: string
-      PRE_INSTALL_SH:
-        required: true
-        type: string
 
 env:
   TARGET: ${{inputs.TARGET}}
@@ -48,9 +39,6 @@ env:
   REPO_BRANCH: ${{inputs.REPO_BRANCH}}
   FEEDS_CONF: ${{inputs.FEEDS_CONF}}
   CONFIG_FILE: ${{inputs.CONFIG_FILE}}
-  DIY_P1_SH: ${{inputs.DIY_P1_SH}}
-  DIY_P2_SH: ${{inputs.DIY_P2_SH}}
-  PRE_INSTALL_SH: ${{inputs.PRE_INSTALL_SH}}
   TZ: Asia/Shanghai
 
 jobs:
@@ -82,6 +70,12 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo -E apt -yqq update
+          sudo -E apt -yqq full-upgrade
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E apt -yqq install dos2unix libfuse-dev          
           sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
           sudo timedatectl set-timezone "$TZ"
           git config --global user.email "aa@163.com"
@@ -103,41 +97,32 @@ jobs:
         uses: stupidloud/cachewrtbuild@main
         with:
           ccache: true
-          mixkey: ${{env.TARGET}}-${{env.REPO_SOURCE}}-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
+          mixkey: ${{env.REPO_SOURCE}}-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
           prefix: ${{ env.OPENWRT_PATH }}
 
-      - name: Load custom feeds
+      - name: Update Feeds
         run: |
-          [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-          if [ -e "$DIY_P1_SH" ]; then
-          chmod +x "$DIY_P1_SH"
           cd openwrt
-          "$GITHUB_WORKSPACE/$DIY_P1_SH"
-          fi
 
-      - name: Update feeds
-        run: cd openwrt && ./scripts/feeds update -a
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a        
 
-      - name: Modify feeds
+      - name: Check Scripts
         run: |
-          if [ -e "$PRE_INSTALL_SH" ]; then
-          chmod +x $PRE_INSTALL_SH
-          cd openwrt
-          $GITHUB_WORKSPACE/$PRE_INSTALL_SH
-          fi          
+          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
 
-      - name: Install feeds
-        run: cd openwrt && ./scripts/feeds install -a
+      - name: Custom Packages
+        run: |
+          cd ./openwrt/package/
+          $GITHUB_WORKSPACE/scripts/Packages.sh
+          $GITHUB_WORKSPACE/scripts/Handles.sh
 
-      - name: Load custom configuration
+      - name: Custom Settings
         run: |
           [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-          if [ -e "$DIY_P2_SH" ]; then          
-          chmod +x $DIY_P2_SH
-          cd openwrt
-          $GITHUB_WORKSPACE/$DIY_P2_SH
-          fi  
+          cd ./openwrt
 
+          $GITHUB_WORKSPACE/scripts/Settings.sh         
 
       - name: Download package
         id: package
